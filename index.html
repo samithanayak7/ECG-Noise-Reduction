@@ -1,0 +1,604 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ECG Lab · cleaning heartbeats with linear algebra</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--paper:#fdf6f4;--grid:#f3d3d3;--grid2:#f8e4e3;--ink:#1d2230;--mute:#667085;--card:#ffffffd9;--line:#e6cfcf;
+--red:#c8323c;--teal:#1b7a8c;--amber:#d08a12;--green:#2f8f5b;--violet:#6b5bb5;--grey:#a7adb8;
+--head:'Bricolage Grotesque',system-ui,sans-serif;--body:'Figtree',system-ui,sans-serif}
+@media (prefers-color-scheme:dark){:root{--paper:#1a1618;--grid:#3a2a2d;--grid2:#2a2023;--ink:#f2e9e9;--mute:#a79a9d;--card:#231d20e6;--line:#43343a;--red:#ff6670;--teal:#4fc3d6;--amber:#f0b441;--green:#58c98a;--violet:#a89bf0;--grey:#7c7479}}
+*{box-sizing:border-box}html,body{margin:0}
+body{font:15px/1.55 var(--body);color:var(--ink);background-color:var(--paper);
+background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px),linear-gradient(var(--grid2) 1px,transparent 1px),linear-gradient(90deg,var(--grid2) 1px,transparent 1px);
+background-size:40px 40px,40px 40px,8px 8px,8px 8px;background-attachment:fixed}
+.app{display:grid;grid-template-columns:300px 1fr;min-height:100vh}
+aside{padding:22px 20px;border-right:1px solid var(--line);background:var(--card);backdrop-filter:blur(6px);position:sticky;top:0;height:100vh;overflow:auto}
+h1{font:700 26px/1.05 var(--head);margin:0 0 4px;letter-spacing:-.02em}
+.sub{color:var(--mute);font-size:13px;margin:0 0 14px}
+.pulse{width:100%;height:46px;margin:0 0 6px}
+label{display:block;font-weight:600;font-size:13px;margin:14px 0 5px}
+.hint{display:block;font-weight:400;color:var(--mute);font-size:12px;margin-top:2px}
+select{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink);font:inherit}
+input[type=range]{width:100%;accent-color:var(--red)}
+.row{display:flex;justify-content:space-between;align-items:baseline}.row b{font:700 15px var(--head)}
+button{font:600 14px var(--body);cursor:pointer;border-radius:8px;border:1px solid var(--line);background:var(--paper);color:var(--ink);padding:8px 12px}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
+.go{width:100%;margin-top:16px;background:var(--red);border-color:var(--red);color:#fff;padding:11px;font-size:15px}
+.go[disabled]{opacity:.6;cursor:wait}
+nav{margin-top:22px;display:grid;gap:4px}
+nav button{text-align:left;border:0;background:none;padding:9px 10px;display:flex;gap:10px;align-items:center;border-radius:8px}
+nav button i{font:700 12px var(--head);width:22px;height:22px;border-radius:50%;border:1.5px solid var(--grey);display:grid;place-items:center;font-style:normal;flex:none}
+nav button:hover{background:#c8323c14}
+nav button[aria-current=true]{background:var(--ink);color:var(--paper)}
+nav button[aria-current=true] i{border-color:var(--red);background:var(--red);color:#fff}
+main{padding:28px clamp(16px,3vw,40px) 60px;min-width:0}
+.status{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:22px}
+.chip{background:var(--card);border:1px solid var(--line);border-radius:999px;padding:5px 12px;font-size:13px}
+.chip b{font-weight:600}
+h2{font:700 clamp(26px,3.4vw,38px)/1.05 var(--head);margin:0 0 10px;letter-spacing:-.02em}
+.lead{max-width:70ch;margin:0 0 8px;font-size:16px}
+.why{max-width:70ch;color:var(--mute);margin:0 0 14px}
+.why b{color:var(--ink)}
+.maths{display:flex;flex-wrap:wrap;gap:10px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 14px;margin:0 0 20px;max-width:900px}
+.maths small{font:700 11px var(--head);text-transform:uppercase;letter-spacing:.08em;color:var(--red)}
+.maths code{font:500 14px ui-monospace,Menlo,monospace;background:var(--ink);color:var(--paper);padding:4px 10px;border-radius:6px}
+.maths span{color:var(--mute);font-size:14px;flex:1;min-width:220px}
+.kpis{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:18px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 16px;min-width:150px;max-width:260px}
+.kpi small{display:block;color:var(--mute);font-size:12px}.kpi b{font:700 24px var(--head)}.kpi em{display:block;font-style:normal;color:var(--mute);font-size:12px}
+.charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,460px),1fr));gap:16px}
+figure{margin:0;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px 10px;min-width:0}
+figure.wide{grid-column:1/-1}
+figcaption{font:700 16px var(--head);margin-bottom:2px}figcaption span{display:block;font:400 13px var(--body);color:var(--mute)}
+.legend{display:flex;flex-wrap:wrap;gap:12px;font-size:12px;margin:6px 0 0}.legend u{display:inline-block;width:14px;height:3px;margin-right:5px;vertical-align:middle;border-radius:2px;text-decoration:none}
+svg.ch{width:100%;height:auto;display:block}svg text{font:14px var(--body);fill:var(--mute)}
+#h2{max-width:min(100%,520px);margin:10px auto 0}
+canvas.heat{width:100%;image-rendering:pixelated;border-radius:6px;display:block;margin-top:8px}
+h3{font:700 18px var(--head);margin:28px 0 2px}
+.h3sub{color:var(--mute);font-size:13px;margin:0 0 10px;max-width:75ch}
+.checks{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:8px}
+.ck{display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:9px 12px;font-size:14px}
+.ck small{display:block;color:var(--mute);font:12px ui-monospace,Menlo,monospace}
+.ck .res{text-align:right;white-space:nowrap;font-weight:600}.ck .res small{font-family:var(--body)}
+.ck.ok .res{color:var(--green)}.ck.bad .res{color:var(--red)}
+.tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 14px}
+.thr{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 16px;margin:0 0 16px;max-width:900px}
+.thr .row{gap:12px}.thr p{margin:6px 0 0;color:var(--mute);font-size:13px}
+.conf{display:grid;grid-template-columns:auto 1fr 1fr;gap:4px;font-size:13px;text-align:center;margin-top:8px;align-items:center}
+.conf div{padding:12px 6px;border-radius:8px;background:var(--paper);border:1px solid var(--line)}.conf .g{background:#2f8f5b26}.conf .r{background:#c8323c22}
+.conf div b{display:block;font:700 20px var(--head)}
+.msg{background:var(--card);border:1px dashed var(--red);border-radius:14px;padding:22px;max-width:60ch}
+.msg code{background:var(--ink);color:var(--paper);padding:2px 7px;border-radius:5px}
+/* ---------- motion ---------- */
+h1 .heart{display:inline-block;color:var(--red);animation:beat 1.1s ease-in-out infinite;transform-origin:center}
+@keyframes beat{0%,100%{transform:scale(1)}12%{transform:scale(1.28)}24%{transform:scale(1)}36%{transform:scale(1.18)}48%{transform:scale(1)}}
+.pulse .base{stroke:var(--line);stroke-width:2;fill:none}
+.pulse .sweep{fill:none;stroke:var(--red);stroke-width:2.4;stroke-linejoin:round;stroke-linecap:round;stroke-dasharray:90 700;animation:sweep 2.2s linear infinite;filter:drop-shadow(0 0 3px var(--red))}
+@keyframes sweep{from{stroke-dashoffset:790}to{stroke-dashoffset:0}}
+.go{box-shadow:0 0 0 0 #c8323c55;animation:ring 2.6s ease-out infinite}
+@keyframes ring{0%{box-shadow:0 0 0 0 #c8323c55}70%,100%{box-shadow:0 0 0 12px #c8323c00}}
+.prog{position:sticky;top:0;height:4px;background:var(--line);border-radius:99px;margin:0 0 18px;overflow:hidden;z-index:2}
+.prog i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--red),var(--amber));border-radius:99px;transition:width .7s cubic-bezier(.2,.7,.2,1)}
+.monitor{position:relative;background:#0f1a17;border-radius:16px;overflow:hidden;margin:0 0 22px;color:#d9f7e8;min-height:92px;border:1px solid #1f3a31}
+.monitor svg{position:absolute;inset:0;width:100%;height:100%;opacity:.9}
+.monitor .trace{fill:none;stroke:#3ef08f;stroke-width:2;stroke-linejoin:round;filter:drop-shadow(0 0 4px #3ef08f)}
+.monitor .gridm{stroke:#1d3a30;stroke-width:1}
+.monitor .fade{fill:url(#mfade)}
+.monitor .info{position:relative;display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center;padding:14px 18px;font-size:14px;text-shadow:0 1px 4px #000}
+.monitor .info b{font:700 22px var(--head);color:#fff}
+.monitor .live{display:inline-flex;align-items:center;gap:6px;font:700 11px var(--head);letter-spacing:.12em;color:#3ef08f}
+.monitor .live:before{content:"";width:8px;height:8px;border-radius:50%;background:#3ef08f;animation:blink 1.1s infinite}
+@keyframes blink{50%{opacity:.2}}
+.hero .step{display:inline-block;font:700 11px var(--head);letter-spacing:.14em;color:#fff;background:linear-gradient(90deg,var(--red),var(--amber));padding:4px 10px;border-radius:999px;margin:0 0 10px}
+.maths{position:relative;overflow:hidden}
+.maths:after{content:"";position:absolute;inset:0;background:linear-gradient(110deg,transparent 30%,#ffffff40 50%,transparent 70%);transform:translateX(-100%);animation:shine 1.4s .5s ease-out forwards;pointer-events:none}
+@keyframes shine{to{transform:translateX(100%)}}
+.in{animation:rise .55s cubic-bezier(.2,.7,.2,1) both}
+@keyframes rise{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+.kpi,figure,.ck{transition:transform .2s,box-shadow .2s}
+.kpi:hover,figure:hover{transform:translateY(-2px);box-shadow:0 8px 24px -12px #0003}
+.ck.ok .res{animation:stamp .5s cubic-bezier(.3,1.6,.5,1) both;animation-delay:inherit}
+@keyframes stamp{from{transform:scale(.4);opacity:0}to{transform:none;opacity:1}}
+.ch polyline.dr{stroke-dasharray:1;stroke-dashoffset:1;animation:dash 1.2s cubic-bezier(.4,.1,.2,1) .15s forwards}
+@keyframes dash{to{stroke-dashoffset:0}}
+.ch .grow{transform-box:fill-box;transform-origin:bottom;animation:grow .7s cubic-bezier(.2,.7,.2,1) both}
+@keyframes grow{from{transform:scaleY(0)}}
+.ch .popg{animation:fadein .9s .2s both}
+@keyframes fadein{from{opacity:0}}
+canvas.heat{animation:wipe 1.1s cubic-bezier(.4,.1,.2,1) both}
+@keyframes wipe{from{clip-path:inset(0 100% 0 0)}to{clip-path:inset(0 0 0 0)}}
+.next{display:flex;align-items:center;gap:10px;margin:30px 0 0;padding:14px 20px;font-size:16px;background:var(--ink);color:var(--paper);border:0;border-radius:12px}
+.next span{transition:transform .2s}.next:hover span{transform:translateX(5px)}
+.loader{width:220px;height:46px;display:block;margin:6px 0 10px}
+/* ---------- see-the-maths panels ---------- */
+.mvfig{margin:0 0 20px;border:1.5px solid var(--red);box-shadow:0 10px 30px -18px #c8323c80}
+.mvfig figcaption{font-size:18px}
+.mvfig figcaption:before{content:"▶ ";color:var(--red)}
+.mv{min-height:120px}.mv svg{width:100%;height:auto;display:block}.mv svg text{font-size:13px}
+.mv .lbl{font:600 15px var(--body);fill:var(--ink)}
+.replay{margin-top:8px}
+.mrow{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:14px;margin:12px 0}
+.mblk{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:12px;color:var(--mute);text-align:center}
+.mblk b{font:700 15px ui-monospace,Menlo,monospace;color:var(--ink)}
+.mg{display:grid;gap:2px}.mg i{display:block;width:16px;height:14px;border-radius:2px;transition:transform .25s,box-shadow .25s}
+.mg i.hl{transform:scale(1.25);box-shadow:0 0 0 2px var(--amber);position:relative;z-index:1}
+.op{font:700 28px var(--head);color:var(--ink)}
+.mcap{text-align:center;font:500 14px ui-monospace,Menlo,monospace;margin:8px 0 0;min-height:22px}
+.fadein{animation:fadein .6s both}
+.rowin{animation:rowin .5s cubic-bezier(.2,.7,.2,1) both}
+@keyframes rowin{from{opacity:0;transform:translateX(-26px)}}
+.drawl{stroke-dasharray:1;stroke-dashoffset:1;animation:dash 1s ease forwards}
+.popin{transform-box:fill-box;transform-origin:center;animation:popin .45s cubic-bezier(.3,1.6,.5,1) both}
+@keyframes popin{from{transform:scale(0);opacity:0}}
+.ring{opacity:0;transform-box:fill-box;transform-origin:center;animation:ring2 1.2s ease-out 2}
+@keyframes ring2{from{transform:scale(1);opacity:1}to{transform:scale(3.2);opacity:0}}
+.svd{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center;margin:6px 0 4px}
+.bx{display:grid;place-items:center;border:2px solid var(--ink);border-radius:6px;font:700 16px var(--head);background:var(--paper);line-height:1.1}
+.bx small{display:block;font:500 11px var(--body);color:var(--mute)}
+.zbars{display:grid;gap:6px;margin-top:8px}
+.zb{display:grid;grid-template-columns:62px 1fr 56px;align-items:center;gap:8px;font-size:12px;color:var(--mute);opacity:.3;transition:opacity .3s}
+.zb.on{opacity:1}.zb i{height:10px;background:var(--red);border-radius:5px;display:block}.zb b{font-variant-numeric:tabular-nums;color:var(--ink);text-align:right}
+.steps{flex:1;min-width:240px;max-width:420px}.steps p{margin:0 0 10px;font-size:14px}
+.side{flex:1;min-width:260px;max-width:440px;font-size:14px}
+.growx{animation:growx .8s cubic-bezier(.2,.7,.2,1) both}
+@keyframes growx{from{transform:scaleX(0)}}
+.c3d{width:100%;height:400px;display:block;cursor:grab;touch-action:none;border-radius:10px;background:radial-gradient(ellipse at 50% 40%,#ffffff10,transparent 70%)}
+.c3d:active{cursor:grabbing}
+.verdict{display:flex;gap:16px;align-items:center;border-radius:16px;padding:16px 20px;margin:0 0 16px;max-width:900px;border:2px solid}
+.verdict.bad{background:#c8323c14;border-color:var(--red)}.verdict.ok{background:#2f8f5b14;border-color:var(--green)}
+.verdict .vic{flex:none;width:58px;height:58px;border-radius:50%;display:grid;place-items:center;font:700 30px var(--head);color:#fff;animation:beat 1.4s ease-in-out infinite}
+.verdict.bad .vic{background:var(--red)}.verdict.ok .vic{background:var(--green)}
+.verdict small{font:700 11px var(--head);letter-spacing:.14em;color:var(--mute)}.verdict b{display:block;font:700 26px/1.1 var(--head)}
+.verdict p{margin:4px 0 0;color:var(--mute);font-size:14px}
+.vchip{display:inline-block;padding:4px 12px;border-radius:999px;font-weight:600;font-size:14px;color:#fff}
+.vchip.bad{background:var(--red)}.vchip.ok{background:var(--green)}
+@media(max-width:860px){.app{grid-template-columns:1fr}aside{position:static;height:auto;border-right:0;border-bottom:1px solid var(--line)}nav{grid-template-columns:repeat(2,1fr)}}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important}.ch polyline.dr,.drawl{stroke-dashoffset:0}.ring{display:none}}
+</style>
+</head>
+<body>
+<div class="app">
+<aside>
+  <h1><span class="heart">♥</span> ECG Lab</h1>
+  <p class="sub">Clean noisy heartbeats and spot abnormal ones, using only matrix maths. Pick a patient, press the red button, then go through steps 1 to 6.</p>
+  <svg class="pulse" viewBox="0 0 260 46" aria-hidden="true"><path class="base" d="M0 28H60l6-3 6 3h10l5 4 4-26 6 40 5-18h8l6-5 7 5h26l6-3 6 3h10l5 4 4-26 6 40 5-18h46"/><path class="sweep" pathLength="790" d="M0 28H60l6-3 6 3h10l5 4 4-26 6 40 5-18h8l6-5 7 5h26l6-3 6 3h10l5 4 4-26 6 40 5-18h46"/></svg>
+  <label for="rec">Patient recording<span class="hint">30 minutes of real heart signal from the MIT-BIH database</span></label>
+  <select id="rec"></select>
+  <label for="noise">Type of noise to add<span class="hint">Real noise recorded from people moving while wearing a monitor</span></label>
+  <select id="noise"></select>
+  <label for="snr"><span class="row"><span>Signal vs noise</span><b id="snrv">6 dB</b></span><span class="hint">Higher number = less noise. 0 dB means noise is as loud as the heartbeat.</span></label>
+  <input id="snr" type="range" min="0" max="24" step="1" value="6">
+  <button id="fit" class="go">Load data &amp; run maths</button>
+  <label for="k"><span class="row"><span>Shapes kept (k)</span><b id="kv">5</b></span><span class="hint">Used in steps 4 and 5. Fewer shapes = more cleaning, but less detail.</span></label>
+  <input id="k" type="range" min="1" max="30" value="5">
+  <nav id="nav"></nav>
+</aside>
+<main>
+  <div class="prog"><i id="progi"></i></div>
+  <div id="status"></div>
+  <div id="view"></div>
+</main>
+</div>
+<script>
+const API = location.protocol==='file:' ? 'http://127.0.0.1:8000' : '';
+const $ = s => document.querySelector(s);
+const STAGES = [
+ {id:'matrix', nav:'Heartbeats → table', title:'Turn heartbeats into a table',
+  lead:'We cut the 30-minute recording into single heartbeats and stack them, one heartbeat per row. Each row holds 504 voltage readings: 252 from each of the two sensors.',
+  why:'Once every beat is a row in one big table (a matrix), we can work on all of them at once with linear algebra.',
+  f:'X̃ = X − 1μᵀ', fw:'Subtract the average heartbeat from every heartbeat, so we only look at how each beat is different.'},
+ {id:'covariance', nav:'What moves together', title:'Find which parts move together',
+  lead:'For every pair of points in a heartbeat, we measure whether they rise and fall together. That gives a 504 × 504 grid.',
+  why:'Points that move together belong to the same underlying <b>shape</b>. This grid is where those shapes are hiding.',
+  f:'C = X̃ᵀX̃ / (M − 1)', fw:'Multiply the table by its own flipped copy and average over all heartbeats.'},
+ {id:'eigen', nav:'Building-block shapes', title:'Discover the building-block shapes',
+  lead:'Our own solver pulls the main shapes (eigenvectors) out of the grid. Any heartbeat can be rebuilt by mixing these shapes in the right amounts.',
+  why:'A handful of shapes describe almost the whole heartbeat. Noise is spread thinly across hundreds of tiny, unimportant shapes.',
+  f:'C v = λ v', fw:'Find directions v that the grid only stretches (by an amount λ) without turning. Bigger λ = more important shape.'},
+ {id:'projection', nav:'Keep the best shapes', title:'Keep the important shapes, drop the rest',
+  lead:'Each heartbeat is rebuilt using only the top k shapes. Move the "Shapes kept" slider on the left and watch the red dashed line change.',
+  why:'This is the actual cleaning step. What we drop is mostly noise.',
+  f:'P = V_k V_kᵀ', fw:'P is a "keep only these shapes" machine. Running it twice changes nothing, because the first run already kept only those shapes (P² = P).'},
+ {id:'denoise', nav:'Cleaner & smaller', title:'How much cleaner, and how much smaller?',
+  lead:'We compare the cleaned heartbeats with the original clean recording, and count how many numbers we need to store.',
+  why:'It is a trade-off: keep too few shapes and you lose heartbeat detail; keep too many and the noise sneaks back in.',
+  f:'x̂ = μ + P(x − μ)', fw:'Cleaned beat = average beat + this beat\'s mix of the kept shapes.'},
+ {id:'anomaly', nav:'Catch abnormal beats', title:'Catch abnormal heartbeats',
+  lead:'We learn the shapes of <b>normal</b> heartbeats from the first 5 minutes. An abnormal beat can\'t be built from normal shapes, so a lot of it is left over.',
+  why:'Every beat gets a "leftover error" score. Beats scoring above the alarm line get flagged as abnormal.',
+  f:'SPE = ‖(I − P)(x − μ)‖²', fw:'Leftover error = how much of the beat the normal shapes can\'t explain.'}
+];
+const NOISE_NAMES={em:'Electrode motion',ma:'Muscle movement',bw:'Breathing / baseline drift'};
+const CK={
+ centered_max_mean:['Average beat removed correctly','column means of X̃ = 0'],
+ C_symmetric:['Grid is a perfect mirror image','C = Cᵀ'],
+ C_psd_min_eig:['No negative variation anywhere','smallest eigenvalue ≥ 0'],
+ VtV_minus_I:['Shapes are fully independent','VᵀV = I'],
+ eig_vs_numpy_rel:['Our solver matches NumPy (importance values)','λ ours = λ numpy'],
+ vec_vs_numpy_min_cos:['Our solver matches NumPy (the shapes)','cos(angle) = 1'],
+ eig_vs_svd_rel:['Matches a second, different method (SVD)','λ = σ² / (M − 1)'],
+ P2_minus_P:['Keeping the shapes twice changes nothing','P² = P'],
+ P_symmetric:['The keep-machine is symmetric','Pᵀ = P'],
+ trace_P_minus_k:['Keeps exactly k shapes','trace(P) = k'],
+ residual_dot_Vk:['Dropped part has nothing in common with kept shapes','V_kᵀ r = 0']
+};
+let stage='matrix', fitted=null, beat=null, lead=0, timer, TH=null, cache={}, STILL=false, seq=0, aseq=0;
+const RM=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const PULSE='M0 28H60l6-3 6 3h10l5 4 4-26 6 40 5-18h8l6-5 7 5h26l6-3 6 3h10l5 4 4-26 6 40 5-18h46';
+const LOADER=`<svg class="pulse loader" viewBox="0 0 260 46" aria-hidden="true"><path class="base" d="${PULSE}"/><path class="sweep" pathLength="790" d="${PULSE}"/></svg>`;
+
+const fmt = v => { if(typeof v!=='number') return String(v); if(v===0) return '0';
+  const a=Math.abs(v); return (a>=1e4||a<1e-2) ? v.toExponential(1) : +v.toPrecision(3)+''; };
+const COL = ['--red','--teal','--amber','--violet','--green','--grey'];
+const cv = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+async function api(path,opt){ const r=await fetch(API+path,opt); if(!r.ok){let m=r.statusText;try{m=(await r.json()).detail||m}catch{} throw new Error(m)} return r.json(); }
+
+function chart(o){
+  const W=o.w||640,H=o.h||250,m={l:64,r:14,t:10,b:32},ser=o.series;
+  const T=v=>o.logY?Math.log10(Math.max(v,1e-12)):v;
+  let xs=[],ys=[];
+  ser.forEach(s=>{s.x=s.x||s.y.map((_,i)=>i);xs.push(...s.x);ys.push(...s.y.map(T))});
+  (o.hlines||[]).forEach(h=>ys.push(T(h.v)));
+  let x0=o.xmin??Math.min(...xs),x1=Math.max(...xs),y0=o.ymin??Math.min(...ys),y1=o.ymax??Math.max(...ys);
+  if(o.bars) y0=Math.min(0,y0); if(y0===y1){y1+=1}
+  const pad=o.bars?0:(y1-y0)*.06; if(o.ymin===undefined&&!o.bars) y0-=pad; y1+=pad;
+  const X=v=>m.l+(v-x0)/(x1-x0||1)*(W-m.l-m.r), Y=v=>H-m.b-(T(v)-y0)/(y1-y0)*(H-m.t-m.b);
+  const Yr=t=>H-m.b-(t-y0)/(y1-y0)*(H-m.t-m.b);
+  const nice=(a,b,n=5)=>{const r=(b-a)/n||1,p=10**Math.floor(Math.log10(r)),f=r/p,st=(f<1.5?1:f<3?2:f<7?5:10)*p,t=[];
+    for(let v=Math.ceil(a/st)*st;v<=b+st*1e-9;v+=st)t.push(+v.toPrecision(12));return t};
+  let yt=nice(y0,y1); if(o.logY){const lo=Math.ceil(y0),hi=Math.floor(y1),st=Math.max(1,Math.ceil((hi-lo)/5)),e=[];for(let v=hi;v>=lo;v-=st)e.push(v);if(e.length>=2)yt=e}
+  let g='';
+  yt.forEach(t=>{const yy=Yr(t);g+=`<line x1="${m.l}" x2="${W-m.r}" y1="${yy}" y2="${yy}" stroke="${cv('--line')}"/><text x="${m.l-6}" y="${yy+4}" text-anchor="end">${o.logY?fmt(10**t):fmt(t)}</text>`});
+  nice(x0,x1).forEach(xv=>g+=`<text x="${X(xv)}" y="${H-m.b+16}" text-anchor="middle">${fmt(xv)}</text>`);
+  let p='';
+  ser.forEach((s,i)=>{const c=cv(s.c||COL[i%6]);
+    if(o.bars&&s.bar){const bw=(W-m.l-m.r)/s.x.length*.7;p+=s.y.map((v,j)=>`<rect x="${X(s.x[j])-bw/2}" y="${Y(v)}" width="${bw}" height="${Math.max(0,Yr(0)-Y(v))}" fill="${c}" opacity=".85" class="${STILL?'':'grow'}" style="animation-delay:${j*25}ms"/>`).join('')}
+    else if(s.dots){p+=`<g class="${STILL?'':'popg'}">`+s.y.map((v,j)=>`<circle cx="${X(s.x[j])}" cy="${Y(v)}" r="${s.r||2.2}" fill="${c}" opacity="${s.o||.7}"/>`).join('')+'</g>'}
+    else{p+=`<polyline ${!STILL&&!s.dash?'class="dr" pathLength="1"':''} fill="none" stroke="${c}" stroke-width="${s.w||1.8}" ${s.dash?'stroke-dasharray="5 4"':''} stroke-linejoin="round" points="${s.x.map((v,j)=>X(v).toFixed(1)+','+Y(s.y[j]).toFixed(1)).join(' ')}"/>`;
+      if(s.pts)p+=s.y.map((v,j)=>`<circle cx="${X(s.x[j])}" cy="${Y(v)}" r="2.6" fill="${c}"/>`).join('')}});
+  (o.hlines||[]).forEach(h=>p+=`<line x1="${m.l}" x2="${W-m.r}" y1="${Y(h.v)}" y2="${Y(h.v)}" stroke="${cv('--ink')}" stroke-dasharray="6 4"/>`);
+  (o.vlines||[]).forEach(v=>p+=`<line y1="${m.t}" y2="${H-m.b}" x1="${X(v)}" x2="${X(v)}" stroke="${cv('--ink')}" stroke-dasharray="3 4" opacity=".7"/>`);
+  const ax=`<text x="${(W+m.l)/2}" y="${H-2}" text-anchor="middle">${o.xl||''}</text><text transform="rotate(-90)" x="${-H/2}" y="12" text-anchor="middle">${o.yl||''}</text>`;
+  const lg=ser.filter(s=>s.l).map((s,i)=>`<span><u style="background:${cv(s.c||COL[i%6])}"></u>${s.l}</span>`).join('');
+  return `<svg class="ch" viewBox="0 0 ${W} ${H}" role="img" aria-label="${o.title||'chart'}">${g}${p}${ax}</svg>${lg?`<div class="legend">${lg}</div>`:''}`;
+}
+const fig=(t,d,body,cls='')=>`<figure class="${cls}"><figcaption>${t}<span>${d}</span></figcaption>${body}</figure>`;
+const kpi=(l,v,e='')=>`<div class="kpi"><small>${l}</small><b>${v}</b>${e?`<em>${e}</em>`:''}</div>`;
+function checks(c){
+  const good=(k,v)=>/min_cos/.test(k)?v>.999:/psd/.test(k)?v>-1e-9:Math.abs(v)<1e-6;
+  return `<h3>Maths proof checks</h3><p class="h3sub">Each line is a rule from linear algebra that our method depends on, tested live on this data. "Off by 1e-15" means zero apart from tiny computer rounding.</p><div class="checks">`+
+   Object.entries(c).map(([k,v])=>{const g=good(k,v),[name,eq]=CK[k]||[k,''];
+    const det=/min_cos/.test(k)?`cos = ${(+v).toFixed(4)}`:/psd/.test(k)?`smallest = ${fmt(v)}`:`off by ${fmt(Math.abs(v))}`;
+    return `<div class="ck ${g?'ok':'bad'}"><span>${name}<small>${eq}</small></span><span class="res">${g?'✓ passed':'✗ failed'}<small>${det}</small></span></div>`}).join('')+`</div>`;
+}
+function heat(id,M){
+  const c=document.getElementById(id); if(!c)return; const R=M.length,C=M[0].length; c.width=C;c.height=R;
+  const ctx=c.getContext('2d'),im=ctx.createImageData(C,R);let mx=0;M.forEach(r=>r.forEach(v=>mx=Math.max(mx,Math.abs(v))));
+  M.forEach((r,i)=>r.forEach((v,j)=>{const t=v/(mx||1),o=(i*C+j)*4,a=Math.min(1,Math.abs(t)**.6);
+    const base=t>=0?[200,50,60]:[27,122,140];im.data[o]=255+(base[0]-255)*a;im.data[o+1]=255+(base[1]-255)*a;im.data[o+2]=255+(base[2]-255)*a;im.data[o+3]=255}));
+  ctx.putImageData(im,0,0); c.style.aspectRatio=C+'/'+R;
+}
+
+/* ---------- anomaly threshold slider (log scale) ---------- */
+const L=Math.log10;
+const s2t=p=>10**(L(TH.lo)+(L(TH.hi)-L(TH.lo))*p/1000);
+const t2s=t=>Math.round((L(t)-L(TH.lo))/(L(TH.hi)-L(TH.lo))*1000);
+function anomalyParts(d){
+  const c=d.chart,k=d.checks,y=c.abnormal,thr=d.vars.threshold,ab=k.tp+k.fn,nm=k.fp+k.tn;
+  const pick=f=>({x:c.minutes.filter((_,i)=>!!y[i]===f),y:c.spe.filter((_,i)=>!!y[i]===f).map(v=>Math.max(v,1e-9))});
+  const n=pick(false),a=pick(true);
+  return {
+   kpis:kpi('Abnormal beats caught',`${k.tp} / ${ab}`,'higher is better')+kpi('False alarms',`${k.fp} / ${nm}`,'normal beats wrongly flagged')+
+        kpi('Overall score (F1)',(+k.f1).toFixed(3),'1.000 = perfect')+kpi('Separation score (AUC)',(+k.auc).toFixed(3),'1.000 = every abnormal beat scores above every normal one'),
+   chart:chart({w:1000,h:380,logY:1,series:[{...n,dots:1,c:'--teal',l:'normal beat'},{...a,dots:1,c:'--red',l:'abnormal beat',r:3,o:.85}],hlines:[{v:thr}],xl:'minutes into the recording',yl:'leftover error (log scale)'}),
+   conf:`<div class="conf"><span></span><b>Flagged</b><b>Not flagged</b><b>Truly abnormal</b><div class="g"><b>${k.tp}</b>caught</div><div class="r"><b>${k.fn}</b>missed</div><b>Truly normal</b><div class="r"><b>${k.fp}</b>false alarm</div><div class="g"><b>${k.tn}</b>correctly ignored</div></div>`
+  };
+}
+function fillAnomaly(d){ STILL=true; const p=anomalyParts(d); STILL=false; AD=d; $('#an-v').innerHTML=verdict(d.checks); inspector(); const mv=$('#mv'); if(mv&&stage==='anomaly') VIZ.anomaly.run(mv,d,true); $('#an-k').innerHTML=p.kpis; $('#an-c').innerHTML=p.chart; $('#an-m').innerHTML=p.conf; }
+function thrLabel(){ return `${fmt(TH.v)} <span style="font-weight:400;color:var(--mute)">${Math.abs(TH.v-TH.auto)<1e-12?'(automatic rule)':'(set by you)'}</span>`; }
+
+/* ---------- stage renderers ---------- */
+const R={
+ matrix(d){const c=d.chart,m=d.vars;return {html:
+  `<div class="kpis">${kpi('Heartbeats (rows)',m.M)}${kpi('Readings per heartbeat (columns)',m.N,'252 per sensor × 2 sensors')}</div>
+   <div class="charts">${fig('The average heartbeat','Sensor 1 on the left, sensor 2 on the right of the dotted line. This is what we subtract from every beat.',chart({series:[{y:c.mean_beat,c:'--red'}],vlines:[m.split],xl:'reading number across the beat',yl:'voltage (mV)'}))}
+   ${fig('The first 200 heartbeats, as a picture','Each horizontal line is one heartbeat. Red = high voltage, blue = low. The vertical stripes show the same pattern repeating beat after beat.',`<canvas class="heat" id="h1"></canvas>`)}</div>`+checks(d.checks),after:()=>heat('h1',c.heatmap)}},
+ covariance(d){const m=d.vars;return {html:
+  `<div class="kpis">${kpi('Grid size',m.shape.join(' × '),'every reading compared with every other')}${kpi('Total variation',fmt(m.trace),'sum of the diagonal (the "trace")')}</div>
+   <div class="charts">${fig('The covariance grid','Red = these two points rise together, blue = one rises while the other falls. It\'s a mirror image across the diagonal.',`<canvas class="heat" id="h2"></canvas>`)}</div>`+checks(d.checks),after:()=>heat('h2',d.chart.heatmap)}},
+ eigen(d){const c=d.chart,m=d.vars,ks=c.explained.map((_,i)=>i+1),cum=c.cumulative;
+  const k1=Math.round(c.explained[0]*100);return {html:
+  `<div class="kpis">${kpi('Shape #1 alone explains',k1+'%','of all the variation')}${kpi('Shapes needed for 95%',m.k95,'out of 504 possible')}${kpi('Our solver finished in',m.iters+' steps')}</div>
+   <div class="charts">${fig('How much each shape explains','Bars = each shape on its own. Line = running total. The first few shapes do almost all the work.',chart({series:[{x:ks,y:c.explained.map(v=>v*100),bar:1,c:'--teal',l:'this shape'},{x:ks,y:cum.map(v=>v*100),c:'--red',pts:1,l:'running total'}],bars:1,xl:'shape number',yl:'% of variation'}))}
+   ${fig('How fast our solver finds the answer','The error drops towards zero with every step (log scale). Less important shapes take a little longer.',chart({logY:1,series:Object.entries(c.convergence).map(([k,v])=>({y:v,l:'shape '+k.slice(1)})),xl:'solver step',yl:'error'}))}
+   ${fig('Every heartbeat as a point in 3-D shape-space','Each dot is one heartbeat, placed by how much of shapes 1, 2 and 3 it contains (its scores z₁, z₂, z₃). Drag to rotate. Red dots are beats doctors labelled abnormal: they gather in their own region.',`<canvas class="c3d" id="c3a"></canvas><div class="legend" style="justify-content:center"><span><u style="background:${cv('--teal')}"></u>normal beat</span><span><u style="background:${cv('--red')}"></u>abnormal beat</span></div>`,'wide')}
+   ${fig('The first six building-block shapes','Every heartbeat in the recording is a mix of these. Sensor 1 on the left half, sensor 2 on the right.',chart({w:1000,h:320,series:c.eigenbeats.map((v,i)=>({y:v,l:'shape '+(i+1),w:1.4})),xl:'reading number',yl:'weight'}),'wide')}</div>`+checks(d.checks),
+  after:()=>{const z=c.cloud.z,ab=c.cloud.abnormal,T=cv('--teal'),Rd=cv('--red');scene3d($('#c3a'),{pts:z,labels:['shape 1','shape 2','shape 3'],color:i=>ab[i]?Rd:T,size:i=>ab[i]?3.4:2.4})}}},
+ projection(d){const c=d.chart,m=d.vars,h=m.split,s=a=>a.slice(lead*h,lead*h+h);
+  return {html:
+  `<div class="tools"><button id="pb">◀ Previous beat</button><button id="nb">Next beat ▶</button>
+   <button id="ld">Showing sensor ${lead+1} (click to switch)</button><span class="chip">Heartbeat <b>#${m.beat}</b> · ${m.abnormal?'abnormal':'normal'} · keeping <b>${m.k}</b> shape${m.k>1?'s':''}</span></div>
+   <div class="charts">${fig('Noisy vs clean vs cleaned','Grey = what the monitor recorded (with noise). Black = the true heartbeat. Red dashed = our cleaned version, rebuilt from only k shapes.',chart({w:1000,h:380,series:[{x:c.t_ms,y:s(c.noisy),c:'--grey',l:'noisy (input)',w:1.4},{x:c.t_ms,y:s(c.clean),c:'--ink',l:'true heartbeat',w:2},{x:c.t_ms,y:s(c.denoised),c:'--red',dash:1,l:'cleaned (output)',w:2.2}],vlines:[0],xl:'time from the main spike (ms)',yl:'voltage (mV)'}),'wide')}
+   ${fig('What we threw away','The part of the beat outside the kept shapes. It should look like random noise, not like a heartbeat.',chart({series:[{x:c.t_ms,y:s(c.residual),c:'--amber'}],xl:'time from the main spike (ms)',yl:'voltage (mV)'}))}</div>`+checks(d.checks),
+  after:()=>{$('#pb').onclick=()=>{beat=Math.max(0,m.beat-1);run()};$('#nb').onclick=()=>{beat=m.beat+1;run()};$('#ld').onclick=()=>{lead^=1;run(true)}}}},
+ denoise(d){const c=d.chart,m=d.vars,ck=d.checks,g=m.snr_gain_db,times=10**(g/10);
+  const ok=Math.abs(ck.eckart_young_measured-ck.eckart_young_predicted)<=1e-6*Math.max(1,ck.eckart_young_predicted);
+  return {html:
+  `<div class="kpis">${kpi('Noise reduction',(g>=0?'+':'')+fmt(g)+' dB',g>0?`noise power cut to about 1/${fmt(times)}`:'more shapes let noise back in')}${kpi('Error vs true heartbeat',fmt(m.prd_noisy)+'% → '+fmt(m.prd_denoised)+'%','before → after cleaning')}${kpi('Storage',fmt(m.compression_ratio)+'× smaller','numbers needed to store all beats')}${kpi('Best number of shapes',m.best_k,'for this patient and noise level')}</div>
+   <div class="charts">${fig('Noise removed for each k','The dotted line is your current k. The peak is the sweet spot.',chart({series:[{x:c.k,y:c.snr_gain,c:'--teal',pts:1}],vlines:[m.k],xl:'shapes kept (k)',yl:'dB cleaner'}))}
+   ${fig('Storage saving for each k','We only store k numbers per beat plus the shared shapes, instead of 504 numbers per beat.',chart({series:[{x:c.k,y:c.cr,c:'--violet',pts:1}],vlines:[m.k],xl:'shapes kept (k)',yl:'times smaller'}))}</div>
+   <h3>Theory vs reality</h3><p class="h3sub">The Eckart–Young theorem says keeping the top k shapes is the best possible choice, and predicts exactly how much error is left over. We check it on the real data.</p>
+   <div class="checks"><div class="ck ${ok?'ok':'bad'}"><span>Theorem predicted leftover error<small>((M−1)/M) · Σ dropped λ</small></span><span class="res">${fmt(ck.eckart_young_predicted)}</span></div>
+   <div class="ck ${ok?'ok':'bad'}"><span>We measured leftover error<small>mean ‖x̃ − Px̃‖²</small></span><span class="res">${fmt(ck.eckart_young_measured)} ${ok?'✓ match':'✗'}</span></div>
+   <div class="ck"><span>Using k random shapes instead<small>same k, random directions</small></span><span class="res">${fmt(ck.random_subspace_err)}<small>${fmt(ck.random_subspace_err/ck.eckart_young_measured)}× worse</small></span></div></div>`}},
+ anomaly(d){
+  if(!TH){const mx=Math.max(...d.chart.spe);TH={auto:d.vars.threshold,lo:d.vars.threshold/5,hi:mx*1.2,v:d.vars.threshold}}
+  const p=anomalyParts(d);AD=d;ins=null;return {html:
+  `<div id="an-v">${verdict(d.checks)}</div><div class="thr"><label for="thr" style="margin:0"><span class="row"><span>Alarm line (threshold)</span><b id="thrv">${thrLabel()}</b></span></label>
+   <input id="thr" type="range" min="0" max="1000" value="${t2s(TH.v)}">
+   <div class="row"><p>Drag right to raise the line: fewer false alarms, but risk missing abnormal beats. Drag left for the opposite.</p><button id="auto">Reset to automatic</button></div></div>
+   <div class="kpis" id="an-k">${p.kpis}</div>
+   <div class="charts">${fig('Leftover error for every heartbeat after minute 5','Each dot is one heartbeat. Dots above the dashed alarm line get flagged. Red dots are the truly abnormal beats.',`<div id="an-c">${p.chart}</div>`,'wide')}
+   ${fig('3-D view: height = leftover error','Floor = scores on the two main normal shapes. Height = leftover error (log scale). The amber glass sheet is the alarm line: every dot above it is flagged (red). Drag to rotate, and move the slider to raise or lower the sheet.',`<canvas class="c3d" id="c3b"></canvas>`,'wide')}
+   ${fig('Check one heartbeat','Step through individual beats after minute 5 and see the verdict for each, next to the average heartbeat.',`<div id="an-i"><p class="mcap">Loading…</p></div>`,'wide')}
+   ${fig('What the alarm caught and missed','Green boxes are correct decisions, red boxes are mistakes.',`<div id="an-m">${p.conf}</div>`)}
+   ${fig('Trade-off curve (ROC)','Each point is one possible alarm line. A curve hugging the top-left corner means we can catch everything with almost no false alarms.',chart({series:[{x:[0,1],y:[0,1],c:'--grey',dash:1,w:1,l:'random guessing'},{x:d.chart.roc.fpr,y:d.chart.roc.tpr,c:'--red',w:2.2,l:'our method'}],xl:'false alarm rate',yl:'catch rate'}))}</div>`,
+  after:()=>{
+   const sl=$('#thr'),go=()=>{clearTimeout(timer);timer=setTimeout(async()=>{const my=++aseq;try{const d=await api('/stage/anomaly?thr='+TH.v);if(my===aseq&&$('#an-k'))fillAnomaly(d)}catch(e){}},120)};
+   const c=d.chart,L10=v=>Math.log10(Math.max(v,1e-12)),Rd=cv('--red'),T=cv('--teal');
+   s6=scene3d($('#c3b'),{pts:c.z2.map((q,i)=>[q[0],q[1],L10(c.spe[i])]),labels:['shape 1','shape 2','leftover error'],planeZ:()=>L10(TH.v),planeLabel:'alarm line',
+     color:i=>c.spe[i]>TH.v?Rd:T,size:i=>c.spe[i]>TH.v?3.4:2.4});
+   inspector();
+   sl.oninput=()=>{TH.v=s2t(+sl.value);$('#thrv').innerHTML=thrLabel();s6&&s6.redraw();go()};
+   $('#auto').onclick=()=>{TH.v=TH.auto;sl.value=t2s(TH.v);$('#thrv').innerHTML=thrLabel();s6&&s6.redraw();go()};}}}
+};
+
+/* ---------- "see the maths happen" visuals ---------- */
+let anims=[], pcache={};
+const every=(ms,f)=>{const id=setInterval(f,ms);anims.push(id);return id};
+function clearAnims(){anims.forEach(id=>{clearInterval(id);clearTimeout(id)});anims=[]}
+const getP=p=>pcache[p]||(pcache[p]=api(p).catch(e=>{delete pcache[p];throw e}));
+function dcol(t){const a=Math.min(1,Math.abs(t)**.6),b=t>=0?[200,50,60]:[27,122,140];return `rgb(${255+(b[0]-255)*a|0},${255+(b[1]-255)*a|0},${255+(b[2]-255)*a|0})`}
+const grid=(M,mx,cls='')=>`<div class="mg ${cls}" style="grid-template-columns:repeat(${M[0].length},16px)">`+M.map((r,i)=>r.map((v,j)=>`<i data-r="${i}" data-c="${j}" style="background:${dcol(v/(mx||1))}"></i>`).join('')).join('')+`</div>`;
+const blk=(inner,lab,dim)=>`<div class="mblk">${inner}<b>${lab}</b><span>${dim}</span></div>`;
+const norm2=v=>{const n=Math.hypot(v[0],v[1])||1;return [v[0]/n,v[1]/n]};
+async function pairData(){
+  const H=(await getP('/stage/matrix')).chart.heatmap,n=H.length,half=H[0].length/2;
+  const mu=H[0].map((_,j)=>H.reduce((s,r)=>s+r[j],0)/n);
+  const vr=j=>H.reduce((s,r)=>s+(r[j]-mu[j])**2,0);
+  let a=0;for(let j=1;j<half;j++)if(vr(j)>vr(a))a=j;
+  const b=Math.min(half-1,a+5),P=H.map(r=>[r[a]-mu[a],r[b]-mu[b]]);
+  const c=(p,q)=>P.reduce((s,r)=>s+r[p]*r[q],0)/(n-1),cxx=c(0,0),cyy=c(1,1),cxy=c(0,1);
+  const tr=cxx+cyy,det=cxx*cyy-cxy*cxy,disc=Math.sqrt(Math.max(0,tr*tr/4-det)),l1=tr/2+disc,l2=tr/2-disc;
+  const e1=Math.abs(cxy)>1e-15?norm2([cxy,l1-cxx]):(cxx>=cyy?[1,0]:[0,1]);
+  return {H,mu,P,C:[[cxx,cxy],[cxy,cyy]],l1,l2,e1,e2:[-e1[1],e1[0]]};
+}
+function plane(P,W=440,Hh=320){
+  const ab=P.flat().map(Math.abs).sort((p,q)=>p-q),S=(ab[Math.floor(ab.length*.97)]||1)*1.15,R=Math.min(W,Hh)/2-16,cx=W/2,cy=Hh/2,X=x=>cx+x/S*R,Y=y=>cy-y/S*R;
+  return {S,R,cx,cy,X,Y,W,Hh,base:`<line x1="0" x2="${W}" y1="${cy}" y2="${cy}" stroke="${cv('--line')}"/><line y1="0" y2="${Hh}" x1="${cx}" x2="${cx}" stroke="${cv('--line')}"/>`+
+    P.map(p=>`<circle cx="${X(p[0]).toFixed(1)}" cy="${Y(p[1]).toFixed(1)}" r="2.6" fill="${cv('--teal')}" opacity=".45"/>`).join('')};
+}
+const axisLine=(pl,e,c,dash)=>`<line x1="${pl.X(-e[0]*pl.S*1.4)}" y1="${pl.Y(-e[1]*pl.S*1.4)}" x2="${pl.X(e[0]*pl.S*1.4)}" y2="${pl.Y(e[1]*pl.S*1.4)}" stroke="${cv(c)}" stroke-width="2.5" ${dash?'stroke-dasharray="7 5"':''}/>`;
+function tween(el,from,to,toPts,ms=380){
+  if(RM||!from){el.setAttribute('points',toPts(to));return}
+  const t0=performance.now(),f=now=>{const p=Math.min(1,(now-t0)/ms),e=p<.5?2*p*p:1-(-2*p+2)**2/2;
+    el.setAttribute('points',toPts(to.map((v,i)=>from[i]+(v-from[i])*e)));if(p<1)requestAnimationFrame(f)};requestAnimationFrame(f);
+}
+const VIZ={
+ matrix:{sub:'The recording is cut into single beats. Each beat slides in as one row of the matrix X. Then the average beat is subtracted from every row.',
+  run(el,d){
+   const H=d.chart.heatmap,half=H[0].length/2,n=H.length,rows=6,cols=14,st=Math.floor(half/cols);
+   const mu=H[0].map((_,j)=>H.reduce((s,r)=>s+r[j],0)/n),pick=r=>[...Array(cols)].map((_,j)=>r[j*st]);
+   const X=H.slice(0,rows).map(pick),U=pick(mu),Xc=X.map(r=>r.map((v,j)=>v-U[j]));
+   const mx=Math.max(...X.flat().map(Math.abs)),mxc=Math.max(...Xc.flat().map(Math.abs));
+   const pts=[];H.slice(0,rows).forEach((r,i)=>r.slice(0,half).forEach((v,j)=>pts.push([i*half+j,v])));
+   const lo=Math.min(...pts.map(p=>p[1])),hi=Math.max(...pts.map(p=>p[1])),W=900,h=96,sx=x=>x/(rows*half)*W,sy=y=>h-8-(y-lo)/(hi-lo||1)*(h-26);
+   let strip=`<svg viewBox="0 0 ${W} ${h}"><polyline class="drawl" pathLength="1" fill="none" stroke="${cv('--red')}" stroke-width="2" points="${pts.map(p=>sx(p[0]).toFixed(1)+','+sy(p[1]).toFixed(1)).join(' ')}"/>`;
+   for(let i=1;i<rows;i++)strip+=`<line class="fadein" style="animation-delay:${1+i*.15}s" x1="${sx(i*half)}" x2="${sx(i*half)}" y1="16" y2="${h}" stroke="${cv('--ink')}" stroke-dasharray="4 4"/>`;
+   for(let i=0;i<rows;i++)strip+=`<text class="fadein" style="animation-delay:${1.1+i*.15}s" x="${sx(i*half+half/2)}" y="12" text-anchor="middle">✂ beat ${i+1}</text>`;
+   const rws=(M,m,d0)=>`<div class="mg" style="grid-template-columns:repeat(${cols},16px)">`+M.map((r,i)=>r.map(v=>`<i class="rowin" style="animation-delay:${d0+i*.18}s;background:${dcol(v/m)}"></i>`).join('')).join('')+'</div>';
+   el.innerHTML=strip+`</svg><div class="mrow">${blk(rws(X,mx,1.9),'X','one row per heartbeat')}<span class="op fadein" style="animation-delay:3s">−</span>${blk(rws(X.map(()=>U),mx,3.1),'1μᵀ','average beat, copied into every row')}<span class="op fadein" style="animation-delay:4.3s">=</span>${blk(rws(Xc,mxc,4.5),'X̃','centred: how each beat differs')}</div>
+   <p class="mcap fadein" style="animation-delay:5.6s">Each square is one voltage reading (red = high, blue = low). Showing 6 of ${d.vars.M} beats and 14 of 252 readings.</p>`;}},
+ covariance:{sub:'Every cell of C is a dot product: one row of X̃ᵀ times one column of X̃, divided by (M − 1). Watch which row and column make each cell.',
+  async run(el){
+   const D=await pairData(),H=D.H,half=H[0].length/2,k=8,st=Math.floor(half/k),cols=[...Array(k)].map((_,j)=>j*st),n=H.length;
+   const Xc=H.map(r=>cols.map(j=>r[j]-D.mu[j])),C=cols.map((_,p)=>cols.map((_,q)=>Xc.reduce((s,r)=>s+r[p]*r[q],0)/(n-1)));
+   const show=Xc.slice(0,5),XT=cols.map((_,p)=>show.map(r=>r[p])),mx=Math.max(...show.flat().map(Math.abs)),mc=Math.max(...C.flat().map(Math.abs));
+   if(!el.isConnected)return;
+   el.innerHTML=`<div class="mrow">${blk(grid(XT,mx,'gT'),'X̃ᵀ','N × M')}<span class="op">×</span>${blk(grid(show,mx,'gX'),'X̃','M × N')}<span class="op">=</span>${blk(grid(C,mc,'gC'),'C','N × N (symmetric)')}</div>
+   <p class="mcap" id="ccap"></p><p class="mcap" style="color:var(--mute);font:12px var(--body)">Showing 8 readings and 5 beats so it fits. The real C is 504 × 504 and uses every beat.</p>`;
+   const pairs=[[0,0],[1,3],[2,5],[4,4],[6,1],[3,7],[5,6]];let t=0;
+   const tick=()=>{if(!el.isConnected)return;el.querySelectorAll('.hl').forEach(e=>e.classList.remove('hl'));const [i,j]=pairs[t++%pairs.length];
+     el.querySelectorAll(`.gT i[data-r="${i}"],.gX i[data-c="${j}"],.gC i[data-r="${i}"][data-c="${j}"],.gC i[data-r="${j}"][data-c="${i}"]`).forEach(e=>e.classList.add('hl'));
+     el.querySelector('#ccap').innerHTML=`C[${i+1},${j+1}] = (row ${i+1} of X̃ᵀ) · (column ${j+1} of X̃) / (M − 1) = <b>${fmt(C[i][j])}</b>`+(i!==j?`<br><span style="color:var(--mute)">C[${j+1},${i+1}] lights up too: same number, because C is a mirror image</span>`:'');};
+   tick();if(!RM)every(1700,tick);}},
+ eigen:{sub:'Power iteration on a 2-reading example: keep multiplying a vector by C and it swings round onto the main direction (the top eigenvector). SVD finds the same thing a different way.',
+  async run(el,d){
+   const D=await pairData(),pl=plane(D.P),L=pl.R*.95,{cx,cy}=pl;if(!el.isConnected)return;
+   const sig=d.chart.explained.slice(0,6).map(Math.sqrt),S6=sig.map((s,i)=>sig.map((_,j)=>i===j?s:0));
+   el.innerHTML=`<div class="mrow" style="align-items:flex-start"><div style="flex:1;min-width:280px;max-width:460px">
+     <svg viewBox="0 0 ${pl.W} ${pl.Hh}">${pl.base}<g id="eax" style="opacity:0;transition:opacity .7s">${axisLine(pl,D.e1,'--red')}${axisLine(pl,D.e2,'--amber',1)}</g>
+     <g id="pv" style="transform-box:view-box;transform-origin:${cx}px ${cy}px;transition:transform .6s cubic-bezier(.3,.8,.3,1)"><line x1="${cx}" y1="${cy}" x2="${cx+L-10}" y2="${cy}" stroke="${cv('--ink')}" stroke-width="3.5"/><path d="M${cx+L} ${cy}l-14 -7v14z" fill="${cv('--ink')}"/></g></svg>
+     <p class="mcap" id="pcap"></p><div class="legend" style="justify-content:center"><span><u style="background:${cv('--ink')}"></u>our vector v</span><span><u style="background:${cv('--red')}"></u>eigenvector 1 (λ₁ = ${fmt(D.l1)})</span><span><u style="background:${cv('--amber')}"></u>eigenvector 2 (λ₂ = ${fmt(D.l2)})</span></div></div>
+     <div class="side"><b>The same answer by SVD</b><div class="svd"><div class="bx" style="width:66px;height:110px">X̃<small>M × N</small></div><span class="op">=</span><div class="bx" style="width:44px;height:110px">U<small>M × r</small></div><span class="op">·</span>${blk(grid(S6,sig[0]),'Σ','')}<span class="op">·</span><div class="bx" style="width:96px;height:44px">Vᵀ<small>r × N</small></div></div>
+     <p>Σ is diagonal: its entries σᵢ shrink fast, so a few shapes matter most. The rows of Vᵀ are exactly the eigen-shapes of C, and <b>λᵢ = σᵢ² / (M − 1)</b>. Two different methods give the same numbers; see the proof checks below.</p></div></div>`;
+   let v=norm2([D.e2[0]+.3*D.e1[0],D.e2[1]+.3*D.e1[1]]),i=0,last=-Math.atan2(v[1],v[0])*180/Math.PI;
+   const err=v=>Math.acos(Math.min(1,Math.abs(v[0]*D.e1[0]+v[1]*D.e1[1])))*180/Math.PI;
+   const show=()=>{let a=-Math.atan2(v[1],v[0])*180/Math.PI;while(a-last>180)a-=360;while(last-a>180)a+=360;last=a;el.querySelector('#pv').style.transform=`rotate(${a}deg)`;
+     el.querySelector('#pcap').innerHTML=`step ${i}: &nbsp;v ← Cv / ‖Cv‖ &nbsp;·&nbsp; angle to the eigenvector: <b>${err(v).toFixed(2)}°</b>`};
+   const step=()=>{if(!el.isConnected)return true;const w=[D.C[0][0]*v[0]+D.C[0][1]*v[1],D.C[1][0]*v[0]+D.C[1][1]*v[1]],nv=norm2(w);v=(nv[0]*v[0]+nv[1]*v[1]<0)?[-nv[0],-nv[1]]:nv;i++;show();
+     if(err(v)<.05||i>=12){el.querySelector('#eax').style.opacity=1;return true}};
+   show();if(RM){while(!step());}else{const id=every(1000,()=>{if(step())clearInterval(id)})}}},
+ projection:{sub:'Projection in 2-D: a heartbeat x is dropped straight onto the kept direction. It lands at Px, and the drop r = x − Px meets the line at exactly 90°.',
+  async run(el){
+   const D=await pairData(),pl=plane(D.P),e=D.e1,{X,Y}=pl;if(!el.isConnected)return;
+   let b=D.P[0],bs=-1;D.P.filter(p=>Math.abs(p[0])<pl.S*.8&&Math.abs(p[1])<pl.S*.8).forEach(p=>{const t=p[0]*e[0]+p[1]*e[1],r=Math.abs(-p[0]*e[1]+p[1]*e[0]),sc=Math.abs(t)*r;if(sc>bs){bs=sc;b=p}});
+   const t=b[0]*e[0]+b[1]*e[1],px=[t*e[0],t*e[1]],rv=norm2([b[0]-px[0],b[1]-px[1]]),eu=t>0?[-e[0],-e[1]]:e,s=12*pl.S/pl.R;
+   const q1=[px[0]+rv[0]*s,px[1]+rv[1]*s],q2=[q1[0]+eu[0]*s,q1[1]+eu[1]*s],q3=[px[0]+eu[0]*s,px[1]+eu[1]*s];
+   el.innerHTML=`<div class="mrow"><div style="flex:1;min-width:280px;max-width:460px"><svg viewBox="0 0 ${pl.W} ${pl.Hh}">${pl.base}${axisLine(pl,e,'--red')}
+    <line class="drawl" pathLength="1" style="animation-delay:.7s" x1="${X(b[0])}" y1="${Y(b[1])}" x2="${X(px[0])}" y2="${Y(px[1])}" stroke="${cv('--amber')}" stroke-width="3"/>
+    <path class="fadein" style="animation-delay:1.8s" d="M${X(q1[0])} ${Y(q1[1])}L${X(q2[0])} ${Y(q2[1])}L${X(q3[0])} ${Y(q3[1])}" fill="none" stroke="${cv('--ink')}" stroke-width="1.5"/>
+    <circle class="popin" style="animation-delay:.2s" cx="${X(b[0])}" cy="${Y(b[1])}" r="7" fill="${cv('--ink')}"/><text class="lbl fadein" style="animation-delay:.3s" x="${X(b[0])+11}" y="${Y(b[1])-9}">x</text>
+    <circle class="popin" style="animation-delay:1.5s" cx="${X(px[0])}" cy="${Y(px[1])}" r="7" fill="${cv('--red')}"/><text class="lbl fadein" style="animation-delay:1.6s" x="${X(px[0])+11}" y="${Y(px[1])+20}">Px</text>
+    <circle class="ring" style="animation-delay:3s" cx="${X(px[0])}" cy="${Y(px[1])}" r="7" fill="none" stroke="${cv('--red')}" stroke-width="2.5"/>
+    <text class="lbl fadein" style="animation-delay:2s;fill:${cv('--amber')}" x="${(X(b[0])+X(px[0]))/2+10}" y="${(Y(b[1])+Y(px[1]))/2}">r</text></svg></div>
+    <div class="steps"><p class="fadein" style="animation-delay:.2s">① Start with one heartbeat <b>x</b> (black dot). Teal dots are the other beats.</p>
+    <p class="fadein" style="animation-delay:.9s">② Drop it straight onto the red line, the kept shape. It lands at <b>Px</b>.</p>
+    <p class="fadein" style="animation-delay:1.9s">③ The drop <b>r = x − Px</b> is what we throw away. It meets the line at 90°, so <b>Px · r = 0</b>.</p>
+    <p class="fadein" style="animation-delay:3s">④ Project <b>Px</b> again and it doesn't move. That's why <b>P² = P</b>.</p></div></div>`;}},
+ denoise:{sub:'Rebuilding one heartbeat shape by shape: start from the average beat, then add each eigen-shape vᵢ times its score zᵢ = vᵢᵀ(x − μ).',
+  async run(el){
+   const [m,e,pr]=await Promise.all([getP('/stage/matrix'),getP('/stage/eigen'),getP('/stage/projection?k=1')]);if(!el.isConnected)return;
+   const mu=m.chart.mean_beat,V=e.chart.eigenbeats,x=pr.chart.noisy,cl=pr.chart.clean,t=pr.chart.t_ms,h=t.length;
+   const z=V.map(v=>v.reduce((s,vi,j)=>s+vi*(x[j]-mu[j]),0)),rec=k=>mu.slice(0,h).map((u,j)=>u+V.slice(0,k).reduce((s,v,i)=>s+z[i]*v[j],0));
+   const R=[0,1,2,3,4,5,6].map(rec),all=[...x.slice(0,h),...cl.slice(0,h),...R.flat()],lo=Math.min(...all),hi=Math.max(...all),W=760,H=280;
+   const sx=i=>20+(t[i]-t[0])/(t[h-1]-t[0])*(W-40),sy=v=>H-14-(v-lo)/(hi-lo||1)*(H-28),toPts=a=>a.map((v,i)=>sx(i).toFixed(1)+','+sy(v).toFixed(1)).join(' ');
+   const zm=Math.max(...z.map(Math.abs))||1;
+   el.innerHTML=`<div class="mrow" style="align-items:flex-start"><div style="flex:2;min-width:300px"><svg viewBox="0 0 ${W} ${H}">
+     <polyline fill="none" stroke="${cv('--grey')}" stroke-width="1.4" points="${toPts(x.slice(0,h))}"/><polyline fill="none" stroke="${cv('--ink')}" stroke-width="2" points="${toPts(cl.slice(0,h))}"/>
+     <polyline id="rb" fill="none" stroke="${cv('--red')}" stroke-width="3" stroke-linejoin="round"/></svg>
+     <div class="legend" style="justify-content:center"><span><u style="background:${cv('--grey')}"></u>noisy beat x</span><span><u style="background:${cv('--ink')}"></u>true beat</span><span><u style="background:${cv('--red')}"></u>rebuilt x̂</span></div></div>
+     <div class="side"><b>Scores zᵢ for this beat</b><div class="zbars">${z.map((v,i)=>`<div class="zb" id="zb${i}"><span>shape ${i+1}</span><i style="width:${(Math.abs(v)/zm*100).toFixed(0)}%"></i><b>${fmt(v)}</b></div>`).join('')}</div></div></div><p class="mcap" id="rcap"></p>`;
+   let k=0,prev=null;const rb=el.querySelector('#rb');
+   const draw=k=>{tween(rb,prev,R[k],toPts);prev=R[k];z.forEach((_,i)=>el.querySelector('#zb'+i).classList.toggle('on',i<k));
+     el.querySelector('#rcap').innerHTML=k?`x̂ = μ + `+z.slice(0,k).map((v,i)=>`(${fmt(v)})·v${i+1}`).join(' + '):'x̂ = μ  (just the average beat, no shapes yet)'};
+   draw(0);if(RM)draw(6);else every(1100,()=>{if(!el.isConnected)return;k=(k+1)%8;if(k<7)draw(k)});}},
+ anomaly:{sub:'Normal beats sit close to the "normal shapes" line, inside the tolerance band. An abnormal beat sits far away. Leftover error (SPE) = the squared length of the drop to the line.',
+  run(el,d,still){
+   const c=d.chart,y=c.abnormal,thr=d.vars.threshold,med=a=>{const s=[...a].sort((p,q)=>p-q);return s[s.length>>1]||0};
+   const nM=med(c.spe.filter((_,i)=>!y[i])),aM=med(c.spe.filter((_,i)=>y[i]));
+   const W=620,H=270,cy=170,sc=110/Math.sqrt(Math.max(aM,thr*1.3,1e-12)),dist=v=>Math.max(5,Math.sqrt(v)*sc),band=Math.min(150,Math.sqrt(thr)*sc),xn=190,xa=440;
+   const A=(cls,dl)=>still?'':`class="${cls}" style="animation-delay:${dl}s"`;
+   const vals=[['typical normal beat',nM,'--teal'],['alarm line',thr,'--ink'],['typical abnormal beat',aM,'--red']],L=v=>Math.log10(Math.max(v,1e-12));
+   const lo=Math.min(...vals.map(v=>L(v[1])))-.5,hi=Math.max(...vals.map(v=>L(v[1])));
+   el.innerHTML=`<div class="mrow" style="align-items:center"><div style="flex:2;min-width:300px"><svg viewBox="0 0 ${W} ${H}">
+     <rect x="0" y="${cy-band}" width="${W}" height="${2*band}" fill="${cv('--teal')}" opacity=".12"/><text x="8" y="${cy+Math.max(band,6)+20}">teal band = tolerance (inside = not flagged)</text>
+     <line x1="0" x2="${W}" y1="${cy}" y2="${cy}" stroke="${cv('--red')}" stroke-width="2.5"/><text x="${W-8}" y="${cy+20}" text-anchor="end">the "normal shapes" line</text>
+     <line ${A('drawl',.5)} pathLength="1" x1="${xn}" x2="${xn}" y1="${cy-dist(nM)}" y2="${cy}" stroke="${cv('--teal')}" stroke-width="3"/>
+     <circle ${A('popin',.1)} cx="${xn}" cy="${cy-dist(nM)}" r="8" fill="${cv('--teal')}"/><text class="lbl" x="${xn-14}" y="${cy-dist(nM)-10}" text-anchor="end">normal beat</text>
+     <line ${A('drawl',1.2)} pathLength="1" x1="${xa}" x2="${xa}" y1="${cy-dist(aM)}" y2="${cy}" stroke="${cv('--red')}" stroke-width="3"/>
+     <circle ${A('popin',.8)} cx="${xa}" cy="${cy-dist(aM)}" r="9" fill="${cv('--red')}"/><text class="lbl" x="${xa+14}" y="${cy-dist(aM)+5}">abnormal beat ⚠</text></svg></div>
+     <div class="side"><b>Leftover error (log scale)</b>${vals.map(([n,v,col],i)=>`<div style="margin:10px 0"><div class="row" style="font-size:13px"><span>${n}</span><b style="font:600 13px var(--body)">${fmt(v)}</b></div>
+       <div style="height:12px;background:var(--line);border-radius:6px;overflow:hidden"><i class="${still?'':'growx'}" style="animation-delay:${.3+i*.25}s;display:block;height:100%;width:${Math.max(3,(L(v)-lo)/(hi-lo||1)*100).toFixed(0)}%;background:${cv(col)};border-radius:6px;transform-origin:left"></i></div></div>`).join('')}
+       <p>The typical abnormal beat leaves <b>${(r=>r>=1000?Math.round(r).toLocaleString():fmt(r))(aM/(nM||1e-12))}×</b> more error than a typical normal one, which is why the two are so easy to separate.</p></div></div>`;}}
+};
+function startViz(d){const el=$('#mv'),vz=VIZ[stage];if(!el||!vz)return;
+  const go=()=>{clearAnims();el.innerHTML='<p class="mcap">Drawing…</p>';Promise.resolve().then(()=>vz.run(el,d)).catch(e=>{el.innerHTML=`<p class="mcap">Couldn’t draw this one: ${e.message}</p>`})};
+  go();$('#mvr').onclick=go;}
+
+/* ---------- tiny 3-D engine (canvas, drag to rotate) ---------- */
+function scene3d(cv3,o){
+  const ctx=cv3.getContext('2d');let yaw=.75,pitch=.42,drag=null,auto=!RM,idle=0;
+  const rng=k=>{const v=o.pts.map(p=>p[k]);if(k===2&&o.planeZ!=null)v.push(o.planeZ());let lo=Math.min(...v),hi=Math.max(...v);return [lo,hi-lo||1]};
+  let R=[0,1,2].map(rng);const nz=(v,k)=>((v-R[k][0])/R[k][1])*2-1;
+  const draw=()=>{
+    const dpr=devicePixelRatio||1,W=cv3.clientWidth,H=cv3.clientHeight;if(cv3.width!==W*dpr){cv3.width=W*dpr;cv3.height=H*dpr}
+    ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,W,H);
+    const sc=Math.min(W,H)*.34,cy=Math.cos(yaw),sy=Math.sin(yaw),cp=Math.cos(pitch),sp=Math.sin(pitch);
+    const P=(x,y,z)=>{const X=x*cy-y*sy,D=x*sy+y*cy,Y=z*cp-D*sp,d=z*sp+D*cp,f=3.2/(3.2+d);return [W/2+X*sc*f,H/2-Y*sc*f,d]};
+    const ink=cv('--mute'),line=cv('--line');ctx.lineWidth=1;ctx.strokeStyle=line;
+    const E=[[-1,-1,-1,1,-1,-1],[-1,1,-1,1,1,-1],[-1,-1,-1,-1,1,-1],[1,-1,-1,1,1,-1],[-1,-1,1,1,-1,1],[-1,1,1,1,1,1],[-1,-1,1,-1,1,1],[1,-1,1,1,1,1],[-1,-1,-1,-1,-1,1],[1,-1,-1,1,-1,1],[-1,1,-1,-1,1,1],[1,1,-1,1,1,1]];
+    E.forEach(e=>{const a=P(e[0],e[1],e[2]),b=P(e[3],e[4],e[5]);ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);ctx.stroke()});
+    for(let i=-1;i<=1;i+=.5){[[i,-1,-1,i,1,-1],[-1,i,-1,1,i,-1]].forEach(e=>{const a=P(e[0],e[1],e[2]),b=P(e[3],e[4],e[5]);ctx.globalAlpha=.5;ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);ctx.stroke();ctx.globalAlpha=1})}
+    if(o.planeZ){const z=nz(o.planeZ(),2);if(z>=-1&&z<=1){const c=[[-1,-1],[1,-1],[1,1],[-1,1]].map(q=>P(q[0],q[1],z));
+      ctx.beginPath();c.forEach((q,i)=>i?ctx.lineTo(q[0],q[1]):ctx.moveTo(q[0],q[1]));ctx.closePath();ctx.fillStyle=cv('--amber')+'33';ctx.fill();ctx.strokeStyle=cv('--amber');ctx.lineWidth=2;ctx.stroke();
+      ctx.fillStyle=cv('--amber');ctx.font='600 13px Figtree,sans-serif';ctx.fillText(o.planeLabel||'',c[1][0]+6,c[1][1]);}}
+    ctx.fillStyle=ink;ctx.font='13px Figtree,sans-serif';[[1.25,-1,-1,o.labels[0]],[-1,1.25,-1,o.labels[1]],[-1,-1,1.18,o.labels[2]]].forEach(l=>{const q=P(l[0],l[1],l[2]);ctx.fillText(l[3],q[0]-20,q[1])});
+    const pts=o.pts.map((p,i)=>{const q=P(nz(p[0],0),nz(p[1],1),nz(p[2],2));return [q[0],q[1],q[2],i]}).sort((a,b)=>b[2]-a[2]);
+    pts.forEach(q=>{const i=q[3],f=3.2/(3.2+q[2]);ctx.globalAlpha=.55+.4*(1-(q[2]+1.7)/3.4);ctx.fillStyle=o.color(i);ctx.beginPath();ctx.arc(q[0],q[1],(o.size?o.size(i):2.6)*f,0,7);ctx.fill()});ctx.globalAlpha=1;
+  };
+  const loop=()=>{if(!cv3.isConnected)return;if(auto&&!drag){yaw+=.0045}else if(!drag&&++idle>180)auto=!RM;draw();requestAnimationFrame(loop)};
+  cv3.onpointerdown=e=>{drag=[e.clientX,e.clientY];auto=false;idle=0;cv3.setPointerCapture(e.pointerId)};
+  cv3.onpointermove=e=>{if(!drag)return;yaw-=(e.clientX-drag[0])*.01;pitch=Math.max(-1.2,Math.min(1.2,pitch+(e.clientY-drag[1])*.01));drag=[e.clientX,e.clientY];if(RM)draw()};
+  cv3.onpointerup=()=>{drag=null;idle=0};
+  if(RM)draw();else loop();
+  return {redraw:()=>{R=[0,1,2].map(rng);draw()}};
+}
+
+/* ---------- anomaly verdict + single-beat inspector ---------- */
+let AD=null,ins=null,s6=null;
+function verdict(k){const fl=k.tp+k.fp,tot=fl+k.fn+k.tn;
+  return (fl>0?`<div class="verdict bad"><div class="vic">!</div><div><small>FINAL VERDICT</small><b>⚠ Anomaly detected</b><p><b style="display:inline;font:inherit;color:var(--ink)">${fl}</b> of ${tot} heartbeats after minute 5 (${(fl/tot*100).toFixed(1)}%) don’t fit the normal heartbeat shapes. ${k.tp} of them match the doctors’ own labels.</p></div></div>`
+   :`<div class="verdict ok"><div class="vic">✓</div><div><small>FINAL VERDICT</small><b>No anomaly found</b><p>All ${tot} heartbeats after minute 5 fit the normal heartbeat shapes.</p></div></div>`)+
+   `<p class="h3sub" style="margin-top:-6px">This is a maths demo on a research dataset, not a medical diagnosis.</p>`;}
+async function inspector(){
+  const el=$('#an-i');if(!el||!AD)return;const c=AD.chart,n=c.spe.length,thr=AD.vars.threshold;
+  if(ins===null){ins=c.spe.findIndex(v=>v>thr);if(ins<0)ins=0}ins=Math.max(0,Math.min(n-1,ins));
+  const g=c.first_test_beat+ins,[pb,m]=await Promise.all([getP(`/stage/projection?k=1&beat=${g}`),getP('/stage/matrix')]);if(!el.isConnected)return;
+  const h=pb.vars.split,flag=c.spe[ins]>thr,truth=!!c.abnormal[ins];
+  el.innerHTML=`<div class="tools"><button id="ip">◀ Previous beat</button><button id="in">Next beat ▶</button><button id="inf">Next flagged beat ⚠</button>
+    <span class="vchip ${flag?'bad':'ok'}">${flag?'⚠ Flagged as abnormal':'✓ Looks normal'}</span><span class="chip">Doctors’ label: <b>${truth?'abnormal':'normal'}</b> ${flag===truth?'✓ agree':'✗ disagree'}</span></div>
+    ${chart({w:1000,h:300,series:[{x:pb.chart.t_ms,y:m.chart.mean_beat.slice(0,h),c:'--teal',l:'average heartbeat',w:2,dash:1},{x:pb.chart.t_ms,y:pb.chart.clean.slice(0,h),c:flag?'--red':'--ink',l:`heartbeat #${g} (minute ${fmt(c.minutes[ins])})`,w:2.6}],vlines:[0],xl:'time from the main spike (ms)',yl:'voltage (mV)'})}
+    <p class="mcap">Leftover error <b>${fmt(c.spe[ins])}</b> ${flag?'&gt;':'≤'} alarm line <b>${fmt(thr)}</b> → ${flag?'flagged':'not flagged'}</p>`;
+  $('#ip').onclick=()=>{ins--;inspector()};$('#in').onclick=()=>{ins++;inspector()};
+  $('#inf').onclick=()=>{const j=c.spe.findIndex((v,i)=>i>ins&&v>thr);ins=j<0?c.spe.findIndex(v=>v>thr):j;inspector()};
+}
+
+/* ---------- control flow ---------- */
+function monitorSVG(){
+  const beat='h40l5-3 5 3h8l4 4 4-26 5 38 4-16h8l7-6 7 6h33',d='M0 60'+beat.repeat(9);
+  let gl='';for(let x=0;x<1200;x+=24)gl+=`<line class="gridm" x1="${x}" x2="${x}" y1="0" y2="100"/>`;for(let y=0;y<100;y+=24)gl+=`<line class="gridm" x1="0" x2="1200" y1="${y}" y2="${y}"/>`;
+  return `<svg viewBox="0 0 800 100" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><defs><linearGradient id="mfade" x1="0" x2="1"><stop offset="0" stop-color="#0f1a17"/><stop offset=".55" stop-color="#0f1a17" stop-opacity=".85"/><stop offset="1" stop-color="#0f1a17" stop-opacity="0"/></linearGradient></defs>${gl}
+   <g><path class="trace" d="${d}"/>${RM?'':'<animateTransform attributeName="transform" type="translate" from="0 0" to="-120 0" dur="1.4s" repeatCount="indefinite"/>'}</g><rect class="fade" x="0" y="0" width="560" height="100"/></svg>`;
+}
+function paintStatus(){ const f=fitted; $('#status').innerHTML=f?
+  `<div class="monitor in">${monitorSVG()}<div class="info"><span class="live">LIVE</span><span>Patient <b>${f.record}</b></span><span><b>${f.M}</b> heartbeats</span><span><b>${f.abnormal}</b> abnormal</span><span>Noise: ${NOISE_NAMES[f.noise]||f.noise} at ${f.snr_db} dB</span></div></div>`:''; }
+function stagger(){ if(RM) return; let i=0;
+  $('#view').querySelectorAll('.hero,.why,.maths,.kpi,figure,.ck,.thr,.tools,h3,.h3sub,.next').forEach(el=>{el.style.animationDelay=Math.min(i++*55,1100)+'ms';el.classList.add('in')}); }
+function countUp(){ if(RM) return;
+  $('#view').querySelectorAll('.kpi b').forEach(el=>{const txt=el.textContent,re=/\d+(\.\d+)?/g; if(!re.test(txt)||/e[-+]/.test(txt)) return;
+    const t0=performance.now(),D=1000,step=now=>{const p=Math.min(1,(now-t0)/D),e=1-(1-p)**3;
+      el.textContent=txt.replace(/\d+(\.\d+)?/g,m=>(parseFloat(m)*e).toFixed((m.split('.')[1]||'').length));
+      if(p<1)requestAnimationFrame(step);else el.textContent=txt}; requestAnimationFrame(step)}); }
+function go(id){ stage=id; nav(); run(); window.scrollTo({top:0,behavior:RM?'auto':'smooth'}); }
+function nav(){ $('#progi').style.width=fitted?((STAGES.findIndex(s=>s.id===stage)+1)/STAGES.length*100)+'%':'0'; $('#nav').innerHTML=STAGES.map((s,i)=>`<button data-s="${s.id}" aria-current="${s.id===stage}"><i>${i+1}</i>${s.nav}</button>`).join('');
+  $('#nav').onclick=e=>{const b=e.target.closest('button');if(b)go(b.dataset.s)}; }
+function msg(h,t){ $('#view').innerHTML=`<div class="msg"><h2 style="font-size:24px">${h}</h2><p>${t}</p></div>`; }
+async function run(local){
+  if(!fitted) return;
+  const i=STAGES.findIndex(s=>s.id===stage),st=STAGES[i];
+  let q='';
+  if(stage==='projection') q=`?k=${$('#k').value}`+(beat!==null?`&beat=${beat}`:'');
+  if(stage==='denoise') q=`?k=${$('#k').value}`;
+  if(stage==='anomaly'&&TH) q=`?thr=${TH.v}`;
+  try{
+    const my=++seq, key=stage+q; const d=(local&&cache[key])||(cache[key]=await api('/stage/'+stage+q));
+    if(my!==seq) return;
+    if(stage==='projection') beat=d.vars.beat;
+    const r=R[stage](d);
+    const nx=STAGES[i+1]; clearAnims();
+    $('#view').innerHTML=`<div class="hero"><span class="step">STEP ${i+1} OF ${STAGES.length}</span><h2>${st.title}</h2><p class="lead">${st.lead}</p></div><p class="why"><b>Why it matters:</b> ${st.why}</p>
+      <div class="maths"><small>The maths</small><code>${st.f}</code><span>${st.fw}</span></div>`+
+      (VIZ[stage]?`<figure class="wide mvfig"><figcaption>See the maths happen<span>${VIZ[stage].sub}</span></figcaption><div id="mv" class="mv"></div><button class="replay" id="mvr">↻ Replay</button></figure>`:'')+r.html+
+      (nx?`<button class="next" id="nextb">Next: ${i+2}. ${nx.title} <span>→</span></button>`:`<button class="next" id="nextb">Back to the start <span>↺</span></button>`);
+    r.after&&r.after(); startViz(d);
+    $('#nextb').onclick=()=>go(nx?nx.id:STAGES[0].id);
+    if(!local){stagger();countUp();}
+  }catch(e){ msg('Something went wrong',e.message); }
+}
+async function fit(){
+  const b=$('#fit'); b.disabled=true; b.textContent='Running the maths…'; $('#view').innerHTML=`<div class="msg">${LOADER}<h2 style="font-size:24px">Running the maths…</h2><p>Loading the recording and finding the building-block shapes. This takes a few seconds (longer the first time a patient is downloaded).</p></div>`;
+  try{
+    fitted=await api('/fit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({record:$('#rec').value,noise:$('#noise').value,snr_db:+$('#snr').value})});
+    cache={};pcache={};clearAnims();beat=null;TH=null;$('#k').value=Math.min(30,Math.max(fitted.best_k,3));$('#kv').textContent=$('#k').value;
+    paintStatus(); nav(); run();
+  }catch(e){ fitted=null;paintStatus();
+    msg('Couldn’t run',`${e.message}<br><br>If the server isn’t running, start it in your project folder with <code>uvicorn main:app --port 8000</code>, then press “Load data &amp; run maths”.`); }
+  b.disabled=false;b.textContent='Load data & run maths';
+}
+(async function init(){
+  nav(); let rs={records:['100','105','119','200','208','233'],noise:['em','ma','bw']};
+  try{rs=await api('/records')}catch{}
+  $('#rec').innerHTML=rs.records.map(r=>`<option ${r==='119'?'selected':''}>${r}</option>`).join('');
+  $('#noise').innerHTML=rs.noise.map(n=>`<option value="${n}">${NOISE_NAMES[n]||n}</option>`).join('');
+  $('#snr').oninput=e=>$('#snrv').textContent=e.target.value+' dB';
+  $('#k').oninput=e=>{$('#kv').textContent=e.target.value;clearTimeout(timer);timer=setTimeout(()=>{if(stage==='projection'||stage==='denoise')run()},150)};
+  $('#fit').onclick=fit; fit();
+})();
+</script>
+</body>
+</html>
